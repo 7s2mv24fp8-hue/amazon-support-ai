@@ -2,138 +2,129 @@
 Amazon India Customer Support Executive
 ========================================
 
-A rule-based + model-assisted support chatbot grounded in Amazon India's
-official help guidelines.
+A multi-layered AI support chatbot grounded in Amazon India's official help policies.
 
 Architecture:
-  1. Intent classifier  - keyword/pattern matching to identify topic
-  2. Response engine    - retrieves the precise policy answer for that topic
-  3. Model fallback     - uses your GPT checkpoint for open-ended replies
-  4. Conversation loop  - multi-turn, friendly, branded chat interface
-
-Usage:
-    python support_chat.py                        # rule-based only (no model needed)
-    python support_chat.py --model checkpoints/   # use your GPT checkpoint as fallback
-    python support_chat.py --debug                # show matched intent
+  1. Intent Classifier: High-confidence regex pattern matching for fast, accurate policy answers
+  2. RAG Knowledge Retriever: Semantic keyword scoring over amazon_support_knowledge.txt
+  3. Ollama LLM Engine: Uses local llama3.2:1b with Amazon India Support persona & RAG context
+  4. PyTorch Checkpoint Fallback: Local GPT model support
+  5. Structured Helpful Fallback: Clear self-service options & Amazon India helpline (1800-1200-1637)
 """
 
+import os
 import re
 import sys
-import argparse
-import textwrap
+import json
+import urllib.request
+import urllib.error
 from datetime import datetime
+from typing import Optional, Dict, List, Any
 
 # ──────────────────────────────────────────────────────────────────────────────
-# KNOWLEDGE BASE  (derived from Amazon India official help pages)
+# KNOWLEDGE BASE (Amazon India Official Policies & Guidelines)
 # ──────────────────────────────────────────────────────────────────────────────
 
-KNOWLEDGE_BASE = {
+KNOWLEDGE_BASE: Dict[str, Dict[str, Any]] = {
     "cannot_place_order": {
+        "keywords": ["place order", "cant order", "cannot order", "unable to order", "order failed", "unable to place", "order not placing"],
         "patterns": [
             r"(can'?t|cannot|unable|not able|problem|issue|trouble).*(place|make|do|complete|submit).*(order|purchase|buy)",
-            r"(place|placing|make|making).*(order|purchase).*(problem|issue|fail|error)",
+            r"(place|placing|make|making).*(order|purchase).*(problem|issue|fail|error|decline)",
             r"why (am i|can'?t i|can i not).*(order|buy|purchase)",
-            r"order.*(not going through|failing|failed|error)",
+            r"order.*(not going through|failing|failed|error|stuck)",
         ],
-        "response": """I understand you're having trouble placing an order. Here are the most common reasons this happens:
+        "response": """I understand you're having trouble placing an order. Here are the most common reasons and solutions:
 
-  1. 💳 **Payment Decline** — Your bank may have declined the transaction. Try a different card or payment method.
-  2. 📦 **Item Out of Stock** — The item may no longer be available.
-  3. 🌐 **Technical/Connectivity Issue** — Check your internet connection and try refreshing.
-  4. 📍 **Undeliverable Pincode** — Amazon may not deliver to your selected location.
-  5. 🔢 **Quantity Limit** — Some items have a purchase limit per customer.
-  6. ⏳ **FBA + Seller Items Combined** — Mixed carts can take extra time to process.
+1. 💳 **Payment Decline** — Your bank may have declined the transaction. Try another card, UPI, or Net Banking.
+2. 📦 **Item Out of Stock** — The product may have just sold out.
+3. 🌐 **Technical/Connectivity Issue** — Clear your app/browser cache and refresh.
+4. 📍 **Undeliverable Pincode** — The seller might not currently deliver to your address.
+5. 🔢 **Quantity Limit** — Certain high-demand items have a per-customer limit.
+6. ⏳ **FBA + Seller Items Combined** — Mixed carts require extra processing time.
 
-**Quick fix:** Try clearing your browser cache/app cache, check your pincode on the product page, and verify your payment method is valid.
+👉 **Quick Fix:** Check your pincode on the product page and verify your payment details in [Your Account](https://www.amazon.in/gp/css/your-orders-access).
 
-Would you like help with any specific issue from the list above?"""
+Would you like help with a specific payment method or delivery address?"""
     },
 
     "modify_order": {
+        "keywords": ["modify order", "change item", "change order", "edit order", "update order", "add item"],
         "patterns": [
-            r"(change|modify|update|edit|alter).*(order|item|quantity|number)",
-            r"(order).*(change|modify|update|edit)",
-            r"(add|remove).*(item|product).*(order)",
+            r"\b(change|modify|update|alter)\b.*\b(order|item|quantity|number|cart)\b",
+            r"\b(order)\b.*\b(change|modify|update)\b",
+            r"\b(add|remove)\b.*\b(item|product)\b.*\b(order)\b",
         ],
-        "response": """Once an order is placed, **you cannot change or modify the items or quantity**.
+        "response": """Once an order is placed on Amazon India, **you cannot change or modify items or quantities**.
 
-Here's what you CAN do:
-  ✅ **Cancel the order** and place a fresh one with the correct items.
-  ✅ **Change shipping preferences** (address, delivery instructions) in Your Account — as long as the order hasn't entered shipping yet.
+Here are your best options:
+- ✅ **Cancel the order** and place a fresh order with your updated items.
+- ✅ **Change shipping address/preferences** in [Your Orders](https://www.amazon.in/gp/css/your-orders-access) if the order has not yet entered the shipping process.
 
-👉 To cancel: Go to **Your Orders → Select item → Cancel Items**
-
-Would you like me to walk you through the cancellation process?"""
+👉 **To cancel & re-order:** Go to **Your Orders → Select Item → Cancel Items**."""
     },
 
     "cancel_order": {
+        "keywords": ["cancel order", "cancel item", "cancellation", "how to cancel", "want to cancel", "stop order"],
         "patterns": [
-            r"cancel.*(order|item|purchase)",
-            r"(order|item).*(cancel|cancellation)",
+            r"cancel.*(order|item|purchase|package|delivery)",
+            r"(order|item|package).*(cancel|cancellation)",
             r"how (do i|to|can i).*(cancel)",
             r"want to cancel",
         ],
-        "response": """Here's how to cancel your order:
+        "response": """Here is how to cancel an order on Amazon India:
 
-**Before Shipment (easiest):**
-  1. Go to → [Your Orders](https://www.amazon.in/gp/css/your-orders-access)
-  2. Select the item you want to cancel
-  3. Click **"Cancel Items"**
-  4. Provide a reason (optional) and confirm
+**Before Shipment:**
+1. Go to [Your Orders](https://www.amazon.in/gp/css/your-orders-access).
+2. Select the order and click **"Cancel Items"**.
+3. Select your cancellation reason (optional) and confirm.
 
 **After Shipment:**
-  1. Go to → [Your Orders](https://www.amazon.in/gp/css/your-orders-access)
-  2. Select **"Request Cancellation"**
-  3. The item will be returned and you'll receive a full refund
+1. Go to [Your Orders](https://www.amazon.in/gp/css/your-orders-access).
+2. Click **"Request Cancellation"** or simply refuse the delivery at your doorstep.
+3. Once returned to Amazon, your full refund will be initiated automatically.
 
-💡 **Refunds** are processed back to your original payment method once the item is returned to Amazon."""
+💡 Refunds to original payment methods (UPI/Cards) take **2–5 business days**, while Amazon Pay balance is **instant**."""
     },
 
     "track_order": {
+        "keywords": ["track order", "track package", "where is my order", "order status", "shipment tracking", "delivery status"],
         "patterns": [
-            r"track.*(order|package|shipment|delivery)",
-            r"(order|package|shipment).*(track|status|where|location)",
-            r"where is my (order|package|parcel|shipment)",
+            r"track.*(order|package|shipment|delivery|item)",
+            r"(order|package|shipment|item).*(track|status|where|location)",
+            r"where is my (order|package|parcel|shipment|item)",
             r"(status|update).*(order|delivery|shipment)",
         ],
-        "response": """To track your order:
+        "response": """To track your package in real-time:
 
-  1. Go to **Your Orders** on Amazon India
-  2. Find the order you want to track
-  3. Click **"Track Package"** next to the order
-  4. Click **"See all Updates"** for detailed delivery updates
+1. Go to [Your Orders](https://www.amazon.in/gp/css/your-orders-access).
+2. Find your order and click **"Track Package"**.
+3. Click **"See all updates"** to view live location scans and estimated delivery time.
+4. You can also view the **Courier Partner** (e.g. Amazon Logistics, Delhivery, BlueDart) and Tracking ID.
 
-You'll also see the **courier partner name** (like Delhivery, Ekart, BlueDart, etc.) — you can track directly on their website using the tracking ID shown in Your Orders.
-
-Is there anything specific about your delivery you'd like to know?"""
+Is your delivery overdue or would you like help checking its status?"""
     },
 
     "late_delivery": {
+        "keywords": ["late delivery", "delayed", "delay", "order late", "package not arrived", "has not arrived", "not received yet"],
         "patterns": [
             r"(late|delayed|delay|slow|overdue).*(delivery|order|shipment|package)",
             r"(delivery|order|shipment).*(late|delayed|delay|not arrived|hasn'?t arrived|overdue)",
             r"(expected|estimated).*(delivery|date).*(passed|gone|over)",
             r"not (received|delivered|arrived).*(yet|still)",
         ],
-        "response": """I'm sorry to hear your delivery is running late! Here are common reasons for delays:
+        "response": """I apologize for the delay with your order! Common reasons include transit delays, weather conditions, or local carrier constraints.
 
-  📮 Incorrect or incomplete address
-  🌧️ Severe weather conditions
-  📦 Product damaged in transit
-  🗺️ Local/regional delivery constraints
+**What you can do right now:**
+1. Check updated delivery estimates under [Your Orders](https://www.amazon.in/gp/css/your-orders-access) → **Track Package**.
+2. Verify your delivery address and contact number are accurate.
+3. Most delayed packages arrive within **24–48 hours** of the original date.
 
-**What you should do:**
-  1. ✅ **Track your package** in Your Orders — check the updated estimated delivery date
-  2. ✅ **Verify your address** is complete and correct
-  3. ⏳ **Wait 48 hours** — Amazon notifies customers about significant delays
-  4. 📞 If it's been more than 48 hours past the estimated date, contact Amazon support
-
-**Amazon's A-to-Z Guarantee** protects you for third-party seller orders on both timely delivery and item condition.
-
-Shall I help you with anything else?"""
+🛡️ If your item was sold by a third-party seller, you are fully covered under **Amazon's A-to-Z Guarantee**."""
     },
 
     "delivered_not_received": {
+        "keywords": ["shows delivered", "marked delivered", "delivered but not received", "haven't received", "missing package"],
         "patterns": [
             r"(shows|marked|status).*(delivered|delivery).*(but|however|yet|still).*(not|haven'?t|didn'?t).*(received|got|arrived)",
             r"(not|haven'?t|didn'?t).*(received|got).*(shows|marked|status).*(delivered)",
@@ -141,306 +132,342 @@ Shall I help you with anything else?"""
             r"(package|order|parcel).*(missing|lost).*(delivered|delivery)",
             r"tracking shows delivered",
         ],
-        "response": """I understand how frustrating this is! Here's what to do when tracking shows delivered but you haven't received your package:
+        "response": """If tracking shows "Delivered" but you don't have your package, please follow these steps:
 
-**Step 1 — Verify your address**
-  → Check Your Orders to confirm the delivery address was correct.
-
-**Step 2 — Look around**
-  → Check with household members, neighbors, building security, or mailroom.
-  → Check around your front door, porch, gate, or any safe drop spots.
-
-**Step 3 — Check Message Center**
-  → Go to Amazon Message Center to see if someone accepted the package on your behalf.
-
-**Step 4 — Wait up to 24 hours**
-  → Sometimes delivery agents accidentally scan packages as "delivered" while still in transit.
-
-**Step 5 — Contact Courier Partner**
-  → Find courier details in Your Orders → Track Package
-  → Keep your **Tracking ID** handy (found in Your Orders → scroll down)
-
-**Step 6 — Contact Amazon**
-  → If still unresolved after 24 hours, reach out to Amazon customer support for an A-to-Z Guarantee claim.
-
-Can I help you with anything else?"""
-    },
-
-    "undeliverable": {
-        "patterns": [
-            r"(order|package|shipment).*(undeliverable|undelivered|could not be delivered|failed delivery)",
-            r"(undeliverable|undelivered|failed delivery).*(order|package|shipment)",
-            r"why is my order (undeliverable|undelivered|not delivered)",
-            r"delivery (attempt|failed|unsuccessful)",
-        ],
-        "response": """Your order may be marked as undeliverable for one of these reasons:
-
-  📵 No one was available to accept delivery after multiple attempts
-  🏠 Incorrect address or mismatched pincode/area
-  🚫 Recipient refused delivery
-  🐕 Driver safety concern (e.g., presence of an aggressive dog)
-  📋 Address label became unreadable during transit
-  💥 Package was damaged in transit
-  🌧️ Severe weather or regional contingency
-  📞 Customer couldn't be contacted and no safe drop location was available
-  🔒 Security/mailroom didn't accept the package
-  🚪 Access code needed for automated entry
-
-**What to do:**
-  → Update your address: **Your Account → Your Addresses**
-  → Add specific delivery instructions (e.g., leave with neighbor, call before arriving, gate code)
-  → Track refund status in **Your Orders**
-
-Would you like help updating your delivery address?"""
+1. **Check Delivery Location & Neighbors:** Check with family members, security guard, receptionist, or neighbors who might have accepted on your behalf.
+2. **Check Message Center:** Look for delivery photo / OTP verification messages in your Amazon app.
+3. **Wait 24 Hours:** In rare cases, delivery associates mark a package delivered slightly before arrival.
+4. **Contact Support:** If you still cannot locate it after 24 hours, contact customer support or file an **A-to-Z Guarantee Claim** in Your Orders."""
     },
 
     "damaged_defective": {
+        "keywords": ["damaged", "defective", "broken", "wrong item", "fake", "counterfeit", "expired", "missing parts", "replacement"],
         "patterns": [
             r"(damaged|defective|broken|not working|faulty|defect|scratched|dented|torn|missing parts|wrong item|fake|counterfeit|expired|leaking|dead on arrival)",
             r"(received|got|delivered).*(wrong|damaged|broken|defective|different|fake|expired)",
             r"(product|item|order).*(damage|defect|issue|problem|wrong|broken|fake)",
             r"item.*(not matching|doesn'?t match|different|missing)",
         ],
-        "response": """I'm sorry you received a damaged or defective product! This qualifies for a return/replacement:
+        "response": """I'm very sorry you received a damaged or incorrect product! Amazon India provides a hassle-free replacement or refund:
 
-**What counts as damaged/defective:**
-  ❌ Not working / has cuts, tears, broken parts, dents, or scratches
-  ❌ Seal broken or leakage
-  ❌ Missing parts or accessories
-  ❌ Wrong size, color, or item
-  ❌ Doesn't match product description
-  ❌ Product missing but box untampered
-  ❌ Expired product
-  ❌ Dead on arrival / screen damaged
-  ❌ Fake or counterfeit product
-  ❌ Correct box, incorrect item inside
+**How to request a replacement / refund:**
+1. Go to [Your Orders](https://www.amazon.in/gp/css/your-orders-access).
+2. Click **"Return or Replace Items"** next to the affected product.
+3. Select the reason (e.g. *Damaged*, *Defective*, or *Wrong item sent*).
+4. Choose whether you'd prefer a **free replacement** or **full refund**.
+5. Schedule a doorstep pickup date.
 
-**How to get a replacement or refund:**
-  1. Go to **Your Orders**
-  2. Select the affected order
-  3. Click **"Return or Replace Items"**
-  4. Choose your reason and follow the steps
-
-You're also protected under **Amazon's A-to-Z Guarantee** for third-party seller items.
-
-Would you like more help with your return?"""
-    },
-
-    "emi": {
-        "patterns": [
-            r"(emi|equated monthly installment|installment|monthly payment)",
-            r"(pay|purchase|buy).*(installment|emi|monthly)",
-            r"(no cost emi|zero cost emi|interest free)",
-            r"(credit card|debit card|amazon pay later).*(emi|installment)",
-        ],
-        "response": """Here's everything you need to know about EMI on Amazon India:
-
-**Who is eligible?**
-  ✅ All credit card holders
-  ✅ Debit card holders (check eligibility on Debit EMI page)
-  ✅ Amazon Pay Later users
-
-**Payment methods that support EMI:**
-  💳 Credit Cards | 💳 Debit Cards | 📱 Amazon Pay Later | 🏦 Bajaj Finserv Cards
-
-**No Cost EMI:**
-  → The interest is pre-adjusted in the product price, so you pay **zero extra**. Total payable = Product price.
-
-**How to pay via EMI:**
-  1. Select the product → View all EMI Plans
-  2. Choose your preferred payment method
-  3. Select No Cost EMI (if available)
-  4. Choose installment amount and tenure
-  5. Review order summary and place order
-
-⚠️ Note: The full amount may be temporarily deducted by your bank but will be converted to installments within **2–4 days**.
-
-Do you need help with a specific EMI query?"""
-    },
-
-    "payment_failed": {
-        "patterns": [
-            r"(payment|transaction).*(fail|failed|failing|decline|declined|not (going through|processed|working))",
-            r"(fail|failed|error|decline|declined).*(payment|transaction|order)",
-            r"(couldn'?t|could not|unable to).*(pay|make payment|complete payment|process payment)",
-            r"payment (issue|problem|error)",
-        ],
-        "response": """I'm sorry to hear your payment failed! Here are the most common reasons:
-
-**Why payments fail:**
-  🔢 Incorrect card details (number, CVV, expiry, name, 3D-Secure PIN)
-  🏦 Bank technical issue or outage
-  🔄 Page was closed/refreshed while payment was processing
-  🚫 Card blocked for online transactions
-  📊 Purchase outside your normal spending pattern (bank security block)
-  💳 Card not accepted on Amazon India (check Accepted Payment Methods)
-  🇺🇸 American Express: incorrect billing address or PIN code
-
-**How to fix it:**
-  1. Go to **Your Orders**
-  2. Find the pending/failed order
-  3. Click **"Revise Payment"** and follow instructions
-
-💡 **Pro tip:** Try a different payment method — UPI, Net Banking, or a different card.
-
-Need help with a specific payment method?"""
-    },
-
-    "upi_failed": {
-        "patterns": [
-            r"upi.*(fail|failed|not working|error|decline|declined|issue)",
-            r"(fail|failed|error|issue).*(upi)",
-            r"upi (payment|transaction|transfer)",
-            r"(gpay|phonepe|paytm|bhim).*(fail|issue|error)",
-        ],
-        "response": """Here's why your UPI transaction may have failed and how to fix it:
-
-**Common UPI failure reasons:**
-  🆔 Incorrect UPI ID (format should be xyz@abc)
-  ⏱️ Transaction timeout or server issue — retry after 20 minutes
-  💰 Insufficient balance in bank account
-  🔢 Daily limit exceeded: max ₹1,00,000 per day
-  📊 Transaction count limits:
-     → Max 10 Scan+Send transactions in 24 hours
-     → Max ₹5,000 in 24 hours for new UPI registrations
-     → Max 20 small transactions (₹10 or less) in 30 days
-     → Max 100 Scan+Send transactions per month
-  🏦 Bank server outage or technical glitch
-
-**Important:** UPI is only available on the **Amazon India app** — not on mobile browser or desktop browser.
-
-**What to do:**
-  → Wait 20 minutes and retry via Your Orders page or the link in your email
-  → Try a different payment method (Net Banking, Card, Amazon Pay)
-  → Contact your bank for your specific UPI transaction limits
-
-Would you like help choosing an alternative payment method?"""
-    },
-
-    "unknown_charge": {
-        "patterns": [
-            r"(unknown|unauthorized|unexpected|strange|weird|unrecognized).*(charge|deduction|transaction|payment)",
-            r"(charge|deduction|transaction|payment).*(unknown|unauthorized|unexpected|strange|unrecognized)",
-            r"(money|amount|charge).*(deducted|taken|removed).*(without|unknowingly|unexpectedly)",
-            r"why (was i|am i).*(charged|debited)",
-        ],
-        "response": """I understand seeing an unexpected charge is concerning. Before reporting it as unauthorized, please check:
-
-**Common reasons for unfamiliar charges:**
-  👨‍👩‍👧 Family member placed an order using your card
-  🔗 Another card linked to your account was used
-  📦 Pre-order item was charged when it became available
-  🔄 Cancelled/changed order — some banks show authorizations as charges
-  🛒 Amazon Pay purchase on an external merchant website
-  ⭐ **Prime subscription auto-renewal** — check if auto-pay is enabled
-
-**How to verify:**
-  → Check complete order history in **Your Account**
-  → Visit **Manage Your Prime Membership** for subscription charges
-  → Check **Amazon Pay** transaction history for external purchases
-
-**To report an unauthorized transaction:**
-  📞 Call Amazon India: **1800-1200-1637**
-
-**For failed/pending transaction issues:**
-  → Visit the Payment Issues help page or use Revise Payment in Your Orders
-
-Shall I help you investigate the charge further?"""
+All products sold by Amazon or third-party sellers are covered by Amazon's return policies and A-to-Z Guarantee."""
     },
 
     "returns_refund": {
+        "keywords": ["return", "refund", "how to return", "refund timeline", "money back", "return item", "refund status"],
         "patterns": [
             r"(return|refund|replace|replacement|exchange).*(order|product|item|package)",
             r"(order|product|item|package).*(return|refund|replace|replacement|exchange)",
             r"how (do i|to|can i).*(return|refund|replace|exchange)",
             r"(want to|need to).*(return|refund|get refund)",
-            r"refund (status|when|timeline|time)",
+            r"refund (status|when|timeline|time|process)",
         ],
-        "response": """Here's how to return an item and get a refund on Amazon India:
+        "response": """Here is the complete Return & Refund policy for Amazon India:
 
-**How to Return:**
-  1. Go to **Your Orders**
-  2. Select the order with the item to return
-  3. Click **"Return or Replace Items"**
-  4. Select your reason and choose pickup or drop-off
+**To initiate a return:**
+1. Go to [Your Orders](https://www.amazon.in/gp/css/your-orders-access) → Select item → **"Return or Replace Items"**.
+2. Select your pickup address and schedule a convenient slot.
 
-**Refund Timelines (after return is received by Amazon):**
-  | Payment Method      | Refund Time          |
-  |---------------------|----------------------|
-  | Credit/Debit Card   | 3–5 business days    |
-  | Net Banking         | 3–5 business days    |
-  | UPI                 | 2–4 business days    |
-  | Amazon Pay Balance  | Instant              |
-  | Amazon Gift Card    | 3–5 business days    |
+**Refund Timelines (after pickup/processing):**
+| Payment Method | Refund Duration |
+|---|---|
+| **Amazon Pay Balance** | Instant (within 2 hours) |
+| **UPI** | 2–4 business days |
+| **Credit / Debit Cards** | 3–5 business days |
+| **Net Banking** | 3–5 business days |
+| **Cash on Delivery (COD)** | 2–4 days to linked Bank Account |
 
-💡 Track your refund status in **Your Orders** → Select order → View refund details.
+You can check your refund status anytime in **Your Orders**."""
+    },
 
-Do you have a specific return or refund question?"""
+    "payment_failed": {
+        "keywords": ["payment failed", "payment decline", "transaction failed", "payment error", "money deducted order not placed"],
+        "patterns": [
+            r"(payment|transaction).*(fail|failed|failing|decline|declined|not (going through|processed|working))",
+            r"(fail|failed|error|decline|declined).*(payment|transaction|order)",
+            r"(couldn'?t|could not|unable to).*(pay|make payment|complete payment|process payment)",
+            r"payment (issue|problem|error)",
+            r"(money|amount).*(deducted|debited).*(order not|no order)",
+        ],
+        "response": """Here's what to do if your payment failed or was declined:
+
+**If money was deducted from your bank:**
+- Don't worry! Your money is completely safe.
+- If the order wasn't created, your bank will auto-refund the full amount within **3–5 business days**.
+
+**To fix a pending / failed payment:**
+1. Go to [Your Orders](https://www.amazon.in/gp/css/your-orders-access).
+2. Click **"Revise Payment"** next to the pending order.
+3. Select an alternate payment method (UPI, different card, or Net Banking)."""
+    },
+
+    "upi_failed": {
+        "keywords": ["upi failed", "upi error", "gpay", "phonepe", "paytm", "bhim", "upi limit"],
+        "patterns": [
+            r"upi.*(fail|failed|not working|error|decline|declined|issue|timeout)",
+            r"(fail|failed|error|issue).*(upi)",
+            r"(gpay|phonepe|paytm|bhim).*(fail|issue|error)",
+        ],
+        "response": """UPI payment issues on Amazon India:
+
+**Common causes & limits:**
+- **App only:** Amazon UPI is supported only on the Amazon mobile app (not web/mobile browser).
+- **Daily limit:** Standard bank limit is ₹1,00,000 per day.
+- **New UPI account limit:** Up to ₹5,000 in the first 24 hours.
+- **Bank server downtime:** Temporary bank connection timeouts.
+
+**Recommended steps:**
+1. Wait 15–20 minutes and check [Your Orders](https://www.amazon.in/gp/css/your-orders-access) → **Revise Payment**.
+2. Or use Amazon Pay Balance, Credit/Debit Card, or Net Banking to complete checkout instantly."""
+    },
+
+    "unknown_charge": {
+        "keywords": ["unknown charge", "unauthorized charge", "charged without order", "unrecognized payment", "charged twice"],
+        "patterns": [
+            r"(unknown|unauthorized|unexpected|strange|weird|unrecognized|duplicate|twice).*(charge|deduction|transaction|payment|debited)",
+            r"(charge|deduction|transaction|payment).*(unknown|unauthorized|unexpected|strange|unrecognized|twice)",
+            r"why (was i|am i).*(charged|debited)",
+        ],
+        "response": """If you see an unfamiliar or unexpected charge from Amazon:
+
+1. **Check Prime Membership:** Verify if your annual/monthly Prime subscription renewed automatically under **Your Account → Prime**.
+2. **Check Family Members:** Check if someone with shared access placed an order.
+3. **Check Authorizations:** Bank temporary pre-authorizations for cancelled orders disappear within 48 hours.
+4. **Report Unauthorized Charge:** If you suspect unauthorized access, contact Amazon Support immediately at **1800-1200-1637**."""
     },
 
     "prime": {
+        "keywords": ["prime", "prime membership", "prime video", "cancel prime", "prime renewal", "prime cost"],
         "patterns": [
             r"(prime|prime membership|prime subscription)",
             r"(cancel|manage|renew|renewal).*(prime|membership|subscription)",
             r"prime.*(benefits|cancel|renew|cost|price|charged)",
         ],
-        "response": """Here's how to manage your Amazon Prime membership:
+        "response": """Amazon Prime India Overview & Management:
 
-**To manage Prime:**
-  → Visit **Manage Your Prime Membership** on Amazon India
-  → From there you can: view benefits, check renewal date, update payment method, or cancel
+**Prime Benefits:**
+- ⚡ Free 1-Day & 2-Day Delivery
+- 🎬 Prime Video & Prime Music streaming
+- 🏷️ Exclusive Deals & Early Access during sales
 
-**Prime Auto-Renewal:**
-  → Prime renews automatically. If you see an unexpected charge, it may be your annual or monthly renewal.
-  → To turn off auto-renewal, go to Manage Your Prime Membership → End Membership
+**Manage / Cancel Subscription:**
+- Visit **Your Account → Manage Your Prime Membership**.
+- You can turn off auto-renewal, switch plans (Monthly/Annual), or cancel anytime with a pro-rated refund."""
+    },
 
-**Prime Benefits include:**
-  🚀 Fast delivery | 🎬 Prime Video | 🎵 Prime Music | 📚 Prime Reading | 🛒 Exclusive deals
+    "contact_human": {
+        "keywords": ["human agent", "talk to agent", "customer care number", "call amazon", "speak to someone", "support number", "helpline"],
+        "patterns": [
+            r"(human|person|agent|executive|representative|speak to|talk to|call).*(customer care|support|human|amazon|help)",
+            r"(customer care|helpline|phone number|toll free|contact number).*(amazon)?",
+            r"how (can|do) i (talk|speak|call) (to|with)",
+        ],
+        "response": """You can connect with Amazon India customer service via:
 
-Do you need help with a specific Prime issue?"""
+📞 **Toll-Free Helpline:** `1800-1200-1637` or `1800-3000-9009` (24x7)
+💬 **Call-Me-Back Request:** Go to **Amazon App → Menu → Customer Service → Contact Us → Request a Call** (an executive will call you within 2 minutes).
+📧 **Online Help Center:** [Amazon India Customer Service](https://www.amazon.in/gp/help/customer/display.html)"""
     },
 
     "greeting": {
+        "keywords": ["hi", "hello", "hey", "namaste", "good morning", "good afternoon", "good evening"],
         "patterns": [
             r"^(hi|hello|hey|good morning|good afternoon|good evening|namaste|hii|helo|helloo|sup|yo)[\s!.,]*$",
             r"^(hi|hello|hey).*(there|amazon|support|help)[\s!.,]*$",
         ],
-        "response": None  # handled dynamically
+        "response": None
     },
 
     "goodbye": {
+        "keywords": ["bye", "goodbye", "thanks bye", "resolved", "sorted", "no further questions"],
         "patterns": [
             r"^(bye|goodbye|see you|thanks bye|thank you bye|that'?s all|nothing else|no that'?s all|all good now|resolved|sorted)[\s!.,]*$",
             r"(thank you|thanks).*(that'?s all|nothing else|goodbye|bye|that will be all)",
         ],
-        "response": None  # handled dynamically
+        "response": None
     },
 
     "thanks": {
+        "keywords": ["thank you", "thanks", "tysm", "thx", "appreciate it"],
         "patterns": [
             r"^(thank you|thanks|thank u|thx|ty|tysm|thank you so much|many thanks)[\s!.,]*$",
             r"(thank you|thanks).*(help|assistance|support|info|information)",
         ],
-        "response": None  # handled dynamically
+        "response": None
     },
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# INTENT CLASSIFIER
+# RAG KNOWLEDGE RETRIEVER
+# ──────────────────────────────────────────────────────────────────────────────
+
+class KnowledgeRetriever:
+    """Retrieves relevant chunks from amazon_support_knowledge.txt using keyword relevance."""
+
+    def __init__(self, knowledge_path: Optional[str] = None):
+        self.chunks: List[Dict[str, str]] = []
+        if knowledge_path is None:
+            default_path = os.path.join(os.path.dirname(__file__), "amazon_support_knowledge.txt")
+            if os.path.exists(default_path):
+                knowledge_path = default_path
+
+        if knowledge_path and os.path.exists(knowledge_path):
+            self._load_knowledge(knowledge_path)
+
+    def _load_knowledge(self, path: str):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Split by section headers or Q&A blocks
+            sections = content.split("===")
+            for section in sections:
+                text = section.strip()
+                if not text:
+                    continue
+                # Split further by Q: / A: pairs if present
+                qa_pairs = re.split(r"(?=Q:)", text)
+                for qa in qa_pairs:
+                    qa_clean = qa.strip()
+                    if qa_clean:
+                        self.chunks.append({"text": qa_clean})
+        except Exception:
+            pass
+
+    def retrieve(self, query: str, top_k: int = 2) -> List[str]:
+        if not self.chunks:
+            return []
+
+        q_words = set(re.findall(r"\w+", query.lower()))
+        if not q_words:
+            return []
+
+        scored = []
+        for chunk in self.chunks:
+            chunk_words = set(re.findall(r"\w+", chunk["text"].lower()))
+            overlap = len(q_words & chunk_words)
+            if overlap > 0:
+                score = overlap / (len(q_words) ** 0.5)
+                scored.append((score, chunk["text"]))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [item[1] for item in scored[:top_k]]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# OLLAMA GENERATION CLIENT
+# ──────────────────────────────────────────────────────────────────────────────
+
+class OllamaGenerator:
+    """Invokes local Ollama LLM (e.g. llama3.2:1b) for grounded customer responses."""
+
+    def __init__(self, model_name: str = "llama3.2:1b", host: str = "http://localhost:11434"):
+        self.model_name = model_name
+        self.host = host
+
+    def is_available(self) -> bool:
+        try:
+            req = urllib.request.Request(f"{self.host}/api/tags", method="GET")
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    models = [m.get("name", "") for m in data.get("models", [])]
+                    return any(self.model_name.split(":")[0] in m for m in models)
+        except Exception:
+            return False
+        return False
+
+    def generate_response(self, user_query: str, retrieved_context: str, history: List[Dict[str, str]]) -> Optional[str]:
+        try:
+            system_prompt = (
+                "You are Priya, a polite, helpful, and professional Customer Support Executive from Amazon India. "
+                "Your job is to assist Amazon India customers accurately based on Amazon India policies. "
+                "Guidelines:\n"
+                "- Greet politely and be empathetic.\n"
+                "- Provide clear, step-by-step guidance.\n"
+                "- Ground your answers strictly in Amazon India guidelines.\n"
+                "- Keep responses concise and structured with bullet points or numbered steps where appropriate.\n"
+                "- Never make up false policies."
+            )
+
+            prompt_content = f"Official Amazon India Policy Context:\n{retrieved_context}\n\nCustomer Inquiry: {user_query}"
+
+            # Format conversation for Ollama chat API
+            messages = [{"role": "system", "content": system_prompt}]
+            for h in history[-3:]:
+                role = "assistant" if h.get("role") == "agent" else "user"
+                messages.append({"role": role, "content": h.get("text", "")})
+            messages.append({"role": "user", "content": prompt_content})
+
+            payload = {
+                "model": self.model_name,
+                "messages": messages,
+                "stream": False,
+                "options": {
+                    "temperature": 0.3,
+                    "num_predict": 180
+                }
+            }
+
+            req = urllib.request.Request(
+                f"{self.host}/api/chat",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                if resp.status == 200:
+                    res_json = json.loads(resp.read().decode("utf-8"))
+                    message = res_json.get("message", {}).get("content", "").strip()
+                    if message:
+                        return message
+        except Exception as e:
+            if self.host:
+                pass
+        return None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# INTENT CLASSIFIER WITH FUZZY KEYWORD SCORING
 # ──────────────────────────────────────────────────────────────────────────────
 
 def classify_intent(user_input: str) -> str:
-    """Match user input to an intent using regex patterns."""
+    """Match user input to an intent using regex patterns and keyword heuristics."""
     text = user_input.lower().strip()
+
+    # 1. Regex Pattern Matching
     for intent, data in KNOWLEDGE_BASE.items():
-        for pattern in data["patterns"]:
+        for pattern in data.get("patterns", []):
             if re.search(pattern, text):
                 return intent
-    return "unknown"
+
+    # 2. Keyword Overlap Scoring
+    tokens = set(re.findall(r"\w+", text))
+    best_intent = "unknown"
+    best_score = 0
+
+    for intent, data in KNOWLEDGE_BASE.items():
+        for kw in data.get("keywords", []):
+            kw_tokens = set(re.findall(r"\w+", kw.lower()))
+            if kw_tokens.issubset(tokens):
+                score = len(kw_tokens) * 2
+                if score > best_score:
+                    best_score = score
+                    best_intent = intent
+
+    return best_intent
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# RESPONSE GENERATOR
+# MAIN SUPPORT EXECUTIVE ENGINE
 # ──────────────────────────────────────────────────────────────────────────────
 
 class SupportExecutive:
@@ -449,238 +476,158 @@ class SupportExecutive:
     AGENT_NAME = "Priya"
     BRAND = "Amazon India"
 
-    def __init__(self, model=None, tokenizer=None, config=None, debug=False):
+    def __init__(self, model=None, tokenizer=None, config=None, debug=False, knowledge_path=None):
         self.model = model
         self.tokenizer = tokenizer
         self.config = config
         self.debug = debug
-        self.conversation_history = []
-        self.customer_name = None
+        self.conversation_history: List[Dict[str, str]] = []
+        self.customer_name: Optional[str] = None
         self.session_start = datetime.now()
         self.turn_count = 0
+
+        self.retriever = KnowledgeRetriever(knowledge_path)
+        self.ollama = OllamaGenerator()
 
     def _greeting(self) -> str:
         name_part = f", {self.customer_name}" if self.customer_name else ""
         return (
-            f"Hello{name_part}! 👋 I'm **{self.AGENT_NAME}** from {self.BRAND} Customer Support.\n"
-            f"I'm here to help you with orders, payments, deliveries, returns, and more.\n\n"
-            f"How can I assist you today?"
+            f"Hello{name_part}! 👋 I'm **{self.AGENT_NAME}** from {self.BRAND} Customer Support.\n\n"
+            f"I can assist you with your orders, tracking, refunds, payment issues, returns, and more.\n\n"
+            f"How can I help you today?"
         )
 
     def _farewell(self) -> str:
         name_part = f", {self.customer_name}" if self.customer_name else ""
         return (
-            f"Thank you for contacting {self.BRAND} Support{name_part}! 😊\n"
-            f"I hope your issue has been fully resolved. Have a wonderful day and happy shopping! 🛒\n\n"
-            f"*This session has ended. Type anything to start a new conversation.*"
+            f"Thank you for contacting {self.BRAND} Support{name_part}! 😊\n\n"
+            f"I'm glad I could assist you today. Have a wonderful day and happy shopping! 🛒\n\n"
+            f"*Session ended. Feel free to type any message to start a new chat.*"
         )
 
     def _thanks(self) -> str:
         return (
-            f"You're very welcome! 😊 I'm always happy to help.\n"
-            f"Is there anything else I can assist you with regarding your Amazon orders or account?"
+            f"You're very welcome! 😊 I'm always happy to help.\n\n"
+            f"Is there anything else regarding your Amazon India orders or account I can assist you with?"
         )
 
-    def _unknown(self, user_input: str) -> str:
-        model_response = self._try_model_generate(user_input)
-        if model_response:
-            return model_response
+    def _unknown_fallback(self, user_input: str) -> str:
+        # Retrieve context from official knowledge base
+        retrieved = self.retriever.retrieve(user_input, top_k=2)
+        retrieved_text = "\n\n".join(retrieved) if retrieved else ""
+
+        # 1. Try Ollama LLM if available
+        if self.ollama.is_available():
+            llm_reply = self.ollama.generate_response(user_input, retrieved_text, self.conversation_history)
+            if llm_reply:
+                return llm_reply
+
+        # 2. Try RAG direct snippet if score is good
+        if retrieved_text and len(retrieved_text) > 40:
+            return f"Based on Amazon India's official guidelines:\n\n{retrieved_text}\n\n*Does this answer your question, or would you like to speak to an executive?*"
+
+        # 3. Try PyTorch model fallback
+        model_reply = self._try_pytorch_generate(user_input)
+        if model_reply:
+            return model_reply
+
+        # 4. Comprehensive Structured Fallback
         return (
-            f"I'm sorry, I didn't quite understand that. I can help you with:\n\n"
-            f"  🛒 **Orders** — placing, tracking, cancelling, modifying\n"
-            f"  📦 **Deliveries** — late, undeliverable, missing packages\n"
-            f"  💳 **Payments** — failures, EMI, UPI, unknown charges\n"
-            f"  🔄 **Returns & Refunds** — process and timelines\n"
-            f"  ⭐ **Prime Membership** — manage, cancel, benefits\n"
-            f"  🛠️ **Damaged/Defective Products** — what qualifies, how to claim\n\n"
-            f"Could you please describe your issue in a bit more detail? I'm here to help!"
+            f"I want to make sure you get the exact help you need! Here are quick actions for common queries:\n\n"
+            f"  📦 **Track or Cancel Order:** [Your Orders](https://www.amazon.in/gp/css/your-orders-access)\n"
+            f"  💳 **Payment Declined / Retry:** [Revise Payment](https://www.amazon.in/gp/css/your-orders-access)\n"
+            f"  🔄 **Return & Replacement:** [Return Center](https://www.amazon.in/returns)\n"
+            f"  ⭐ **Prime Membership:** [Manage Prime](https://www.amazon.in/prime)\n"
+            f"  📞 **Speak with Support Executive:** Call toll-free **1800-1200-1637** (24x7)\n\n"
+            f"Could you please describe your issue with a bit more detail (e.g., order status, return, refund) so I can guide you?"
         )
 
-    def _try_model_generate(self, prompt: str) -> str | None:
-        """Use the GPT checkpoint as a fallback for open-ended responses."""
+    def _try_pytorch_generate(self, prompt: str) -> Optional[str]:
         if self.model is None or self.tokenizer is None:
             return None
         try:
             import torch
-            context = (
-                f"Amazon India Customer Support conversation.\n"
-                f"Customer: {prompt}\n"
-                f"Support Agent {self.AGENT_NAME}:"
-            )
+            context = f"Customer: {prompt}\nSupport Agent Priya:"
             ids = self.tokenizer.encode(context)
             x = torch.tensor([ids], dtype=torch.long)
             device = next(self.model.parameters()).device
             x = x.to(device)
             self.model.eval()
             with torch.no_grad():
-                block_size = self.config.get("block_size", 256)
-                max_new = min(150, block_size - len(ids))
-                for _ in range(max_new):
+                block_size = self.config.get("block_size", 128)
+                for _ in range(80):
                     x_cond = x[:, -block_size:]
                     logits, _ = self.model(x_cond)
-                    logits = logits[:, -1, :]
-                    probs = torch.softmax(logits / 0.8, dim=-1)
+                    probs = torch.softmax(logits[:, -1, :] / 0.8, dim=-1)
                     next_id = torch.multinomial(probs, num_samples=1)
                     x = torch.cat([x, next_id], dim=1)
                     decoded = self.tokenizer.decode([next_id.item()])
-                    if decoded in ["\n\n", "Customer:", "Q:"]:
+                    if decoded in ["\n\n", "Customer:"]:
                         break
-            generated = self.tokenizer.decode(x[0].tolist()[len(ids):])
-            generated = generated.split("\n\n")[0].split("Customer:")[0].strip()
-            if len(generated) > 30:
+            generated = self.tokenizer.decode(x[0].tolist()[len(ids):]).split("\n\n")[0].strip()
+            if len(generated) > 25:
                 return generated
         except Exception:
             pass
         return None
 
     def respond(self, user_input: str) -> str:
-        """Generate a support response for the given user input."""
-        self.turn_count += 1
-        self.conversation_history.append({"role": "customer", "text": user_input})
+        """Process input and return a grounded, structured support response."""
+        clean_input = user_input.strip()
+        if not clean_input:
+            return "Please type a message so I can assist you."
 
-        # Extract customer name if introduced
-        name_match = re.search(
-            r"(?:i(?:'m| am)|my name is|this is|call me)\s+([A-Z][a-z]+)",
-            user_input,
-            re.IGNORECASE,
-        )
+        self.turn_count += 1
+        self.conversation_history.append({"role": "customer", "text": clean_input})
+
+        # Name extraction
+        name_match = re.search(r"(?:i(?:'m| am)|my name is|this is|call me)\s+([A-Z][a-z]+)", clean_input, re.IGNORECASE)
         if name_match and not self.customer_name:
             self.customer_name = name_match.group(1).capitalize()
 
-        intent = classify_intent(user_input)
+        intent = classify_intent(clean_input)
 
         if self.debug:
-            print(f"  [DEBUG] Intent: {intent}")
+            print(f"  [DEBUG] Matched Intent: {intent}")
 
-        # Route to response
+        # Intent Routing
         if intent == "greeting":
             response = self._greeting()
         elif intent == "goodbye":
             response = self._farewell()
         elif intent == "thanks":
             response = self._thanks()
-        elif intent == "unknown":
-            response = self._unknown(user_input)
-        else:
+        elif intent != "unknown" and intent in KNOWLEDGE_BASE and KNOWLEDGE_BASE[intent].get("response"):
             response = KNOWLEDGE_BASE[intent]["response"]
+        else:
+            response = self._unknown_fallback(clean_input)
 
         self.conversation_history.append({"role": "agent", "text": response})
         return response
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# TERMINAL UI
+# CHECKPOINT LOADER
 # ──────────────────────────────────────────────────────────────────────────────
 
-def print_banner():
-    """Print the Amazon support chat banner."""
-    width = 70
-    print("\n" + "═" * width)
-    print("  🛒  AMAZON INDIA  |  Customer Support Executive")
-    print("  Powered by AI — Grounded in Amazon Official Guidelines")
-    print("═" * width)
-    print("  Type your question below. Type 'quit' or 'exit' to end the session.")
-    print("═" * width + "\n")
-
-
-def format_agent_response(agent_name: str, text: str) -> str:
-    """Format the agent response for terminal display."""
-    lines = text.split("\n")
-    formatted = []
-    for line in lines:
-        if line.startswith("  ") or line.startswith("  "):
-            formatted.append(line)
-        else:
-            formatted.append(line)
-    output = "\n".join(formatted)
-    return f"\n\033[96m🤖 {agent_name}:\033[0m\n{output}\n"
-
-
-def format_customer_input(name: str | None) -> str:
-    label = name if name else "You"
-    return f"\033[93m👤 {label}:\033[0m "
-
-
 def load_model_from_checkpoint(ckpt_dir: str):
-    """Load GPT model and tokenizer from a checkpoint directory."""
+    """Load GPT model and tokenizer from checkpoint directory if available."""
     try:
         import torch
         from model import GPT
         from tokenizer import CharTokenizer
 
-        ckpt = torch.load(f"{ckpt_dir}/model.pt", map_location="cpu")
-        tok = CharTokenizer.load(f"{ckpt_dir}/vocab.json")
+        model_path = os.path.join(ckpt_dir, "model.pt")
+        vocab_path = os.path.join(ckpt_dir, "vocab.json")
+
+        if not os.path.exists(model_path) or not os.path.exists(vocab_path):
+            return None, None, None
+
+        ckpt = torch.load(model_path, map_location="cpu")
+        tok = CharTokenizer.load(vocab_path)
         model = GPT(**ckpt["config"])
         model.load_state_dict(ckpt["model_state"])
         model.eval()
-        print(f"✅ Loaded GPT model from '{ckpt_dir}' ({ckpt['config']['n_layer']} layers, "
-              f"{ckpt['config']['n_embd']} embd dim)")
         return model, tok, ckpt["config"]
-    except FileNotFoundError:
-        print(f"⚠️  No checkpoint found at '{ckpt_dir}'. Running in rule-based mode only.")
+    except Exception:
         return None, None, None
-    except ImportError as e:
-        print(f"⚠️  Could not import model modules: {e}. Running in rule-based mode only.")
-        return None, None, None
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# MAIN
-# ──────────────────────────────────────────────────────────────────────────────
-
-def main():
-    parser = argparse.ArgumentParser(description="Amazon India Support Executive Chatbot")
-    parser.add_argument("--model", default=None, metavar="CKPT_DIR",
-                        help="Path to GPT checkpoint directory for model-assisted fallback")
-    parser.add_argument("--debug", action="store_true",
-                        help="Show matched intent for each message")
-    args = parser.parse_args()
-
-    # Load model if provided
-    model, tokenizer, config = None, None, None
-    if args.model:
-        model, tokenizer, config = load_model_from_checkpoint(args.model)
-
-    # Initialise support executive
-    agent = SupportExecutive(model=model, tokenizer=tokenizer, config=config, debug=args.debug)
-
-    print_banner()
-
-    # Opening greeting
-    opening = agent.respond("hello")
-    print(format_agent_response(agent.AGENT_NAME, opening))
-
-    # Conversation loop
-    session_active = True
-    while session_active:
-        try:
-            user_input = input(format_customer_input(agent.customer_name)).strip()
-        except (KeyboardInterrupt, EOFError):
-            print("\n")
-            print(format_agent_response(agent.AGENT_NAME, agent._farewell()))
-            break
-
-        if not user_input:
-            continue
-
-        if user_input.lower() in {"quit", "exit", "q"}:
-            print(format_agent_response(agent.AGENT_NAME, agent._farewell()))
-            session_active = False
-            continue
-
-        response = agent.respond(user_input)
-        print(format_agent_response(agent.AGENT_NAME, response))
-
-        # End session after farewell
-        if classify_intent(user_input) == "goodbye":
-            session_active = False
-
-    # Session summary
-    print("\n" + "─" * 70)
-    print(f"  Session ended | Turns: {agent.turn_count} | "
-          f"Duration: {(datetime.now() - agent.session_start).seconds}s")
-    print("─" * 70 + "\n")
-
-
-if __name__ == "__main__":
-    main()
