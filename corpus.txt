@@ -1,0 +1,42 @@
+The old lighthouse stood at the edge of the cliff, its light sweeping
+across the dark water every ten seconds. Sailors said it had guided
+ships home for over a hundred years, through storms that swallowed
+smaller boats whole.
+
+Maya climbed the spiral stairs each evening to check the lamp. Her
+grandmother had done the same, and her grandmother before that. It was
+a quiet kind of work: wind the mechanism, trim the wick, polish the
+glass until it caught the last light of the sun.
+
+"The sea doesn't care how long you've kept it company," her grandmother
+used to say. "It will still take what it wants. Our job is just to make
+sure someone can find their way back."
+
+One night, a storm rolled in faster than the forecast promised. Maya
+watched the light sweep out over waves taller than the lighthouse
+itself. Somewhere out there, a small fishing boat was fighting to find
+the harbor mouth. She kept the lamp burning, adjusted the mirrors, and
+waited.
+
+By morning, the boat had made it in. The captain climbed the cliff path
+just to shake her hand. He said the light had been the only steady
+thing in a night that tried to take everything else. Maya just nodded.
+It was, after all, the job: not to stop the storm, but to be the one
+fixed point a person could steer toward.
+
+Function: add two numbers.
+def add(a, b):
+    return a + b
+
+Function: check if a number is prime.
+def is_prime(n):
+    if n < 2:
+        return False
+    for i in range(2, int(n ** 0.5) + 1):
+        if n % i == 0:
+            return False
+    return True
+
+Function: reverse a string.
+def reverse_string(s):
+    return s[::-1]

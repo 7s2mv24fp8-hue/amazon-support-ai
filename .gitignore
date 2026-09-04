@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.env/
+.venv/
+
+# Model checkpoints (large binary files — regenerate with train.py)
+checkpoints/
+
+# Incoming training queue & processed conversations
+incoming/
+memory_bank/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Secrets / API keys
+.env
+secrets.txt

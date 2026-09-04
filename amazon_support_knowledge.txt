@@ -1,0 +1,111 @@
+Amazon India Customer Support Knowledge Base
+
+=== ORDER PLACEMENT ISSUES ===
+
+Q: Why am I unable to place an order?
+A: There are several reasons why you may be unable to place an order on Amazon India. First, there could be a payment decline - your card may be declined by your bank. Second, the item you selected may be out of stock. Third, there might be a technical or internet connectivity issue on your end or ours. Fourth, the item may be undeliverable to your selected location or pincode. Fifth, there may be a quantity limit on the item. Sixth, when Fulfilled by Amazon and seller fulfilled items are clubbed together, order processing may take more time. Please check each of these possibilities.
+
+Q: I cannot place an order on Amazon.
+A: You cannot place an order due to one of these reasons: payment decline, item out of stock, technical or internet connectivity issue, undeliverable to selected location or pincode, quantity limit reached, or order processing delay when FBA and seller items are combined. Please verify your payment method, check item availability, confirm your pincode is serviceable, and ensure your internet connection is stable.
+
+=== ORDER MODIFICATION AND CANCELLATION ===
+
+Q: Can I change or modify my order after placing it?
+A: No, you cannot change or modify the number of items once you have already placed an order. You will need to place a fresh new order with the desired modifications. However, you can change your shipping preferences in Your Account at any time after placing your order, as long as the order has not yet entered the shipping process.
+
+Q: How can I cancel my order?
+A: To cancel an order before it is shipped, go to Your Orders, select the item you want to cancel, click Cancel Items, and optionally provide a reason for cancellation. To cancel an order that has already been shipped, go to Your Orders, select the Request Cancellation option, and proceed. The items will be returned to Amazon and a refund will be issued if payment was already made.
+
+Q: How do I cancel an Amazon order?
+A: Visit Your Orders on Amazon India. If the order is not yet shipped, select the item and click Cancel Items. If it is already shipped, select Request Cancellation. You will receive a refund to your original payment method once the item is returned.
+
+=== ORDER TRACKING ===
+
+Q: How do I track my package?
+A: To track your package, go to Your Orders, find the order you want to track, select Track Package next to that order, and then select See all Updates to view delivery updates. The status will show the details of the courier partner handling your delivery.
+
+Q: Where is my order?
+A: You can track your order by going to Your Orders on Amazon India. Select the relevant order and click Track Package. You will see all delivery updates and the estimated delivery date along with your courier partner details.
+
+=== LATE DELIVERIES ===
+
+Q: Why is my shipment late?
+A: Your shipment may be delayed due to several reasons: incorrect address, missing apartment or building or floor or house number, severe weather conditions, product out of stock after order placement, product damaged during transit, or local and regional contingencies. You should track your package in Your Orders to confirm the estimated delivery date, verify your shipping address is correct, and wait up to 48 hours for unexpected delays. Amazon typically notifies customers if delivery delays occur.
+
+Q: My order is delayed. What should I do?
+A: First, track your package in Your Orders to see the latest status and estimated delivery date. Second, confirm your shipping address is correct. Third, wait 48 hours as Amazon typically notifies you of any delays. If you still have not received the order, contact Amazon customer support.
+
+=== MISSING PACKAGES ===
+
+Q: My tracking shows delivered but I have not received my package.
+A: First, verify the shipping address by checking your order in Your Orders. Second, look for delivery updates and check your Message Center to see if the package was accepted by someone else. Look around the delivery location and ask household members and neighbors. Third, wait up to 24 hours as sometimes delivery agents accidentally scan the package as delivered while it is still in transit. If you still cannot find it, contact the courier partner using the tracking details in Your Orders, or contact Amazon customer support.
+
+Q: I did not receive my order but it shows as delivered.
+A: Please check the following: verify the shipping address on your order is correct, check if someone else at your address accepted it, look around your delivery location, wait up to 24 hours since scan errors can happen. If unresolved, find courier partner details in Your Orders under Track Package and contact them with your tracking ID.
+
+=== UNDELIVERABLE ORDERS ===
+
+Q: Why is my order marked as undeliverable?
+A: An order may be marked undeliverable for these reasons: no recipient was available to accept delivery even after multiple attempts, the address was incorrect or the pincode and area did not match, recipient refused delivery, address label became unreadable during shipping, package was damaged in transit, local and regional contingencies prevented delivery, severe weather conditions, customer could not be contacted and there was no safe location to deliver, security or mailroom personnel did not accept the package, or an access code was needed to enter automated doors. Please update your address in Your Addresses and add clear delivery instructions.
+
+=== DAMAGED OR DEFECTIVE PRODUCTS ===
+
+Q: What qualifies as a damaged or defective product?
+A: The following qualify as damaged or defective: product not in working condition or has visible cuts, crush, tear, broken parts, dents or scratches; product seal is broken or there is leakage; product arrived with parts or accessories missing; product arrived in a different size or color than ordered; item does not match product description; entire product is missing but box is not tampered; product is expired; dead on arrival or screen damaged; product does not meet expectations; product box damaged due to packaging or transportation issue; correct box contains incorrect item; item missing with box tampered; product is fake or counterfeit; product has a different seal than expected.
+
+Q: My product is damaged. What should I do?
+A: If you received a damaged or defective product, you can request a return or replacement through Your Orders on Amazon India. Select the order, choose Return or Replace items, and follow the instructions. You are protected under Amazon's A-to-Z Guarantee for items sold by third-party sellers.
+
+=== EMI AND PAYMENT OPTIONS ===
+
+Q: How do I check if I am eligible for EMI?
+A: EMIs are available for all credit card holders. For other payment methods, you can check eligibility for Debit EMI or Amazon Pay Later on the Amazon India website. Visit the Debit EMI page or Amazon Pay Later page to check your eligibility.
+
+Q: How do I make a purchase using EMI?
+A: To purchase on EMI, select the product, choose to view all EMI plans, view EMI options under Debit Card, Credit Card, or Amazon Pay Later. Select No Cost EMI options if available. Proceed to checkout, select whether to pay in full or in installments, choose your installment amount and tenure, review the order summary with applicable discounts, and place the order. The full amount may be temporarily deducted by the bank but will be converted to installments within 2 to 4 days and the amount minus the first installment will be refunded.
+
+Q: What is No Cost EMI?
+A: Under a No Cost EMI offer, the total interest payable is already adjusted in the price of the order. The total payable amount including interest equals the product price, so you effectively pay no extra interest. For regular EMI using credit and debit cards, your bank will charge interest.
+
+=== PAYMENT ISSUES ===
+
+Q: Why did my payment fail?
+A: Payments on Amazon India can fail for several reasons: you may have entered incorrect credit or debit card details such as name, card number, CVV, 3D-secure PIN, or expiry date; for American Express cards, incorrect billing address or PIN code causes failure; you may have closed or refreshed the page while payment was being processed; your bank may have had a technical issue or outage; or your card may be blocked for online transactions. To fix a failed payment, go to Your Orders and follow the on-screen instructions to revise your payment.
+
+Q: My payment was declined. What should I do?
+A: Your payment was declined possibly because you accidentally closed the app during processing, entered incorrect card details, your UPI payment timed out, your purchase is outside your normal spending pattern so your bank blocked it for security, your card is blocked for online transactions, your bank has special policies for internet purchases, your bank is experiencing an outage, or you are using a card not accepted on Amazon India. Contact your bank for more information. You can also try a different payment method to complete your order.
+
+Q: Why did my UPI payment fail?
+A: UPI transaction failures can happen due to incorrect UPI ID, technical failures or server timeouts, insufficient bank account balance, exceeding the Rs 1,00,000 daily transaction limit, exceeding 10 Scan and Send transactions in 24 hours, sending more than Rs 5,000 within 24 hours of UPI registration, exceeding 20 small transactions of Rs 10 or less within 30 days, exceeding 100 scan transactions in a month, or technical glitches with the UPI platform or your bank servers. Note that UPI is available only on the Amazon India app and not on mobile browser or desktop browser. Different banks have different transaction limits so contact your bank for specific limits.
+
+Q: I see an unknown charge on my Amazon account.
+A: Before reporting an unauthorized transaction, please check: whether another person with access to your card placed an order, whether a purchase was made using another card linked to your account, whether you placed any pre-order items, whether you recently cancelled or changed orders since banks sometimes show authorizations as charges, whether you placed any orders outside Amazon India using Amazon Pay, or whether your Prime subscription was auto-renewed. Your complete order history is in Your Account. To report any unauthorized transaction, call Amazon customer support at 1800-1200-1637.
+
+=== RETURNS AND REFUNDS ===
+
+Q: How do I return a product?
+A: To return a product, go to Your Orders on Amazon India, select the order containing the item you want to return, select Return or Replace Items, choose your reason for return, and follow the instructions. You will be given options for pickup or drop-off depending on your location.
+
+Q: When will I get my refund?
+A: Refund timelines depend on your payment method. Credit and debit card refunds typically take 3 to 5 business days after the return is processed. Amazon Pay balance refunds are instant. Net banking refunds take 3 to 5 business days. UPI refunds take 2 to 4 business days. The overall timeline also depends on when the item is returned to Amazon.
+
+=== A-TO-Z GUARANTEE ===
+
+Q: What is Amazon A-to-Z Guarantee?
+A: The Amazon A-to-Z Guarantee protects you when you buy items sold and fulfilled by a third-party seller. It covers both timely delivery and the condition of your items. If you have an issue with a third-party seller order, you can file an A-to-Z claim to get a refund or replacement.
+
+=== PRIME MEMBERSHIP ===
+
+Q: How do I manage my Prime membership?
+A: You can manage your Prime membership by visiting the Manage Your Prime Membership page on Amazon India. From there you can view your benefits, check your renewal date, and cancel your membership if needed.
+
+=== GENERAL SUPPORT ===
+
+Q: How do I contact Amazon customer support?
+A: You can contact Amazon India customer support through the Help section on the Amazon website or app. For unauthorized transactions, call 1800-1200-1637. You can also use the chat support option or request a call back from the Help pages.
+
+Q: Thank you for your help.
+A: You are welcome. I am happy I could assist you. If you have any other questions about your Amazon orders, payments, deliveries, or returns, please feel free to ask. Have a great day shopping on Amazon India.
+
+Q: Goodbye.
+A: Goodbye and thank you for contacting Amazon India support. I hope your issue has been resolved. Have a wonderful day.
